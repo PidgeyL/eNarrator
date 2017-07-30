@@ -7,12 +7,28 @@ import pydub
 import pydub.playback
 import pyttsx3
 import queue
-import sys
 import tempfile
 import threading
+import time
 import yael
 
-sys.settrace
+
+def text_splitter(text):
+    chunks    = []
+    increment = 2
+    sentences = text.split(".")
+    length    = len(sentences)
+    while True:
+        if increment > len(sentences):
+            chunks.append(".".join(sentences))
+            break
+        else:
+            chunks.append(".".join(sentences[:increment]))
+            sentences = sentences[increment:]
+            if increment < 128:
+                increment *= 2
+    return chunks
+
 
 class Book:
     def __init__(self, path=None):
@@ -46,6 +62,10 @@ class Book:
         if not ref:
             return None
         data = self.book.container.default_rendition.pac_document.manifest.item_by_id(ref.v_id)
+        # TODO: Fix the following:
+        # sometimes the id is not valid, because the chapter is part of a page
+        # In that case, we should retrieve the previous chapter and get the subsection
+        # For now, we'll just return blank
         if data:
             text = ""
             soup = bs4.BeautifulSoup(data.contents, 'lxml')
@@ -54,15 +74,16 @@ class Book:
                 if hit.name in ['h1', 'h2', 'h3', 'h4', 'h5']:
                     text += "\n\n"
             return text
-        return None
+        return ""
 
 
 class Narrator:
     def __init__(self):
-        self.running  = False
-        self.queue    = queue.Queue()
-        self.narrator = None
+        self.running    = False
+        self.queue      = queue.Queue()
+        self.narrator   = None
         self.force_kill = False
+        self.pause      = False
 
 
     def _do_tts(self, text):
@@ -84,13 +105,10 @@ class Narrator:
         if read_out:
             self.narrator = threading.Thread(target=self.narrate)
             self.narrator.start()
-        chunks = []
-        # Do magic of chopping up into incremental parts
-        chunks = [text]
+        chunks = text_splitter(text)
         for chunk in chunks:
             self.queue.put(self._do_tts(chunk))
         self.queue.put(None) # Signal to the player that this is the last part
-        self.running = False
 
 
     def narrate(self):
@@ -106,6 +124,7 @@ class Narrator:
                 self._play_audio(f)
             else:
                 pass
+        self.running = False
 
 
     def stop_narrating(self):
@@ -113,6 +132,11 @@ class Narrator:
         self.running = False
         if self.narrator:
             self.force_kill = True
+
+
+    def pause_narrating(self):
+        if self.running:
+            self.pause = not self.pause
 
 
     def _play_audio(self, audio):
@@ -134,7 +158,11 @@ class Narrator:
         noc = math.ceil(len(audio) / float(500))
         chunks =  [audio[i * 500:(i + 1) * 500] for i in range(int(noc))]
         for chunk in chunks:
-            if not self.force_kill:
+            if self.force_kill:
+                break
+            if self.pause:
+                time.sleep(.2)
+            else:
                 stream.write(chunk._data)
         stream.stop_stream()
         stream.close()

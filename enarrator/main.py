@@ -80,7 +80,7 @@ def interface(book=None):
                                 chapters.append(item[0])
                         chapters.extend(get_chapter(book.toc, end))
                     else:
-                        chapter_list.extend(get_chapter(book.toc, chapter))
+                        chapters.extend(get_chapter(book.toc, chapter))
             # Generate text
             text=""
             for chapter in chapters:
@@ -88,7 +88,10 @@ def interface(book=None):
             narrator.read(text)
         elif command in ['stop']:
             narrator.stop_narrating()
+        elif command in ['pause']:
+            narrator.pause_narrating()
         elif command in ['exit', 'quit']:
+            narrator.stop_narrating()
             sys.exit()
         
 
