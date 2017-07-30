@@ -1,0 +1,7 @@
+bs4
+gTTS
+pyaudio
+pydub
+pyttsx3
+git+https://github.com/pettarin/yael
+git+https://github.com/NorthernSec/AdvancedInput
